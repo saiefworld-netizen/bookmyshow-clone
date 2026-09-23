@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BookMyShow India - Live Movies</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+<body class="bg-gray-900 text-white font-sans min-h-screen flex flex-col justify-between">
+    <header class="bg-gray-800 p-4 shadow-md flex justify-between items-center px-8">
+        <h1 class="text-2xl font-bold text-red-500">BookMyShow <span class="text-xs bg-red-600 text-white px-2 py-0.5 rounded">INDIA</span></h1>
+        <button id="back-btn" onclick="goHome()" class="hidden bg-gray-700 px-4 py-2 rounded text-sm hover:bg-gray-600">← Back</button>
+    </header>
+    <main class="flex-grow p-6 max-w-6xl mx-auto w-full">
+        <div id="home-view">
+            <div class="bg-gradient-to-r from-red-900 to-black rounded-xl p-6 mb-8 shadow-lg">
+                <h2 class="text-3xl font-extrabold">India's Ultimate Movie Hub</h2>
+                <p class="text-gray-300 text-sm mt-1">Real-time blockbusters running in cinemas near you.</p>
+            </div>
+            <section class="mb-10">
+                <h3 class="text-xl font-bold mb-4 text-red-500">🔥 Now Showing in Indian Theaters</h3>
+                <div id="now-showing-container" class="grid grid-cols-2 md:grid-cols-4 gap-4"></div>
+            </section>
+            <section>
+                <h3 class="text-xl font-bold mb-4 text-yellow-500">✨ Upcoming Blockbusters</h3>
+                <div id="upcoming-container" class="grid grid-cols-2 md:grid-cols-4 gap-4"></div>
+            </section>
+        </div>
+        <div id="seat-view" class="hidden flex flex-col items-center justify-center">
+            <h2 id="selected-movie-title" class="text-2xl font-bold text-red-500 mb-2"></h2>
+            <div class="w-full max-w-md mb-6 text-center">
+                <div class="bg-gray-700 h-2 rounded-full mb-2">0%</div>
+                <span class="text-xs text-gray-400 tracking-widest uppercase">SCREEN THIS WAY</span>
+            </div>
+            <div class="bg-gray-800 p-6 rounded-xl shadow-xl max-w-lg w-full flex flex-col items-center">
+                <div class="grid grid-cols-8 gap-2 mb-6" id="seat-grid"></div>
+                <div class="w-full border-t border-gray-700 pt-4 flex justify-between items-center">
+                    <div>
+                        <p class="text-sm text-gray-400">Selected: <span id="count" class="font-bold text-white">0</span></p>
+                        <p class="text-lg font-bold text-red-500">Total: ₹<span id="total">0</span></p>
+                    </div>
+                    <button onclick="confirmBooking()" class="bg-red-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-red-700 transition">Confirm</button>
+                </div>
+            </div>
+        </div>
+    </main>
+    <script>
+        const socket = io();
+        let currentMovie = "";
+        let selectedSeats = [];
+        const ticketPrice = 250;
+        async function fetchMovies() {
+            const res = await fetch('/api/movies');
+            const data = await res.json();
+            const nowC = document.getElementById('now-showing-container');
+            const upC = document.getElementById('upcoming-container');
+            nowC.innerHTML = ""; upC.innerHTML = "";
+            data.nowShowing.forEach(m => {
+                const p = m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : '';
+                nowC.innerHTML += `<div class="bg-gray-800 rounded-lg overflow-hidden shadow"><img src="${p}" class="w-full h-48 object-cover"><div class="p-2"><h4 class="font-bold text-xs truncate">${m.title}</h4><button onclick="openSeat('${m.title}')" class="mt-2 w-full bg-red-600 py-1 rounded text-xs">Book</button></div></div>`;
+            });
+        }
+        function openSeat(t) {
+            currentMovie = t;
+            document.getElementById('home-view').classList.add('hidden');
+            document.getElementById('seat-view').classList.remove('hidden');
+            document.getElementById('back-btn').classList.remove('hidden');
+            document.getElementById('selected-movie-title').innerText = t;
+            const grid = document.getElementById('seat-grid');
+            grid.innerHTML = "";
+            for(let i=1; i<=32; i++) {
+                grid.innerHTML += `<div onclick="toggleSeat(this, ${i})" class="w-8 h-8 bg-gray-600 rounded flex items-center justify-center cursor-pointer text-xs">${i}</div>`;
+            }
+        }
+        function toggleSeat(el, num) {
+            if(el.classList.contains('bg-red-600')) {
+                el.classList.remove('bg-red-600'); el.classList.add('bg-gray-600');
+                selectedSeats = selectedSeats.filter(s => s !== num);
+            } else {
+                el.classList.remove('bg-gray-600'); el.classList.add('bg-red-600');
+                selectedSeats.push(num);
+            }
+            document.getElementById('count').innerText = selectedSeats.length;
+            document.getElementById('total').innerText = selectedSeats.length * ticketPrice;
+        }
+        function goHome() {
+            document.getElementById('seat-view').classList.add('hidden');
+            document.getElementById('back-btn').classList.add('hidden');
+            document.getElementById('home-view').classList.remove('hidden');
+            selectedSeats = [];
+        }
+        function confirmBooking() {
+            if(selectedSeats.length === 0) return alert('Select seats!');
+            socket.emit('bookSeats', { movie: currentMovie, seats: selectedSeats, totalAmount: selectedSeats.length * ticketPrice });
+            alert('Booking Confirmed!');
+            goHome();
+        }
+        fetchMovies();
+    </script>
+</body>
+</html>
